@@ -21,6 +21,7 @@
             justify-content: center;
             align-items: center;
             overflow: hidden;
+            transition: background-color 0.5s ease;
         }
 
         .screen {
@@ -56,6 +57,18 @@
             animation: popIn 0.2s ease forwards;
         }
 
+        .pixel.bonus {
+            background-color: #ffa502;
+            border: 2px solid #fff;
+            animation: pulse 1s infinite;
+        }
+
+        .pixel.powerup {
+            background-color: #2ed573;
+            border: 2px solid #fff;
+            animation: rotate 2s linear infinite;
+        }
+
         .pixel.clicked {
             animation: popOut 0.2s ease forwards;
         }
@@ -68,6 +81,17 @@
         @keyframes popOut {
             from { transform: scale(1); }
             to { transform: scale(1.5); opacity: 0; }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         button {
@@ -117,6 +141,73 @@
             font-size: 0.9rem;
         }
 
+        .streak-counter {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 1.2rem;
+            color: #ffa502;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .streak-counter.visible {
+            opacity: 1;
+        }
+
+        .achievements {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .achievement {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+
+        .achievement.unlocked {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background-color: #ff4757;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .settings-panel {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .settings-panel.visible {
+            display: block;
+        }
+
+        .settings-panel button {
+            margin: 5px;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+
         body.light-theme {
             background-color: #f1f2f6;
             color: #2f3542;
@@ -138,6 +229,28 @@
             border-color: #2ed573;
             color: #2f3542;
         }
+
+        .share-button {
+            margin-top: 20px;
+            background-color: #1da1f2;
+        }
+
+        .share-button:hover {
+            background-color: #1a91da;
+        }
+
+        .accessibility-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .accessibility-controls button {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
@@ -148,17 +261,36 @@
 
     <div id="game-screen" class="screen hidden">
         <div class="game-area" id="game-area"></div>
+        <div class="streak-counter" id="streak-counter"></div>
+        <div class="achievements" id="achievements"></div>
     </div>
 
     <div id="game-over-screen" class="screen hidden">
         <div class="score">Score: <span id="final-score">0</span></div>
         <div class="high-score">High Score: <span id="high-score">0</span></div>
+        <div class="achievements" id="game-over-achievements"></div>
         <button id="play-again-button">Play Again</button>
+        <button class="share-button" id="share-button">Share Score</button>
     </div>
 
     <button class="theme-toggle" id="theme-toggle">Toggle Theme</button>
+    <div class="accessibility-controls">
+        <button id="toggle-sound">Sound: On</button>
+        <button id="toggle-haptics">Haptics: On</button>
+    </div>
+
+    <div class="settings-panel" id="settings-panel">
+        <button id="pixel-color-red">Red Pixel</button>
+        <button id="pixel-color-blue">Blue Pixel</button>
+        <button id="pixel-color-green">Green Pixel</button>
+        <button id="pixel-shape-square">Square</button>
+        <button id="pixel-shape-circle">Circle</button>
+    </div>
 
     <audio id="pop-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
+    <audio id="bonus-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
+    <audio id="powerup-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
+    <audio id="level-up-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
 
     <script>
         // Game state
@@ -168,7 +300,22 @@
             timer: null,
             timeLimit: 1200,
             pixel: null,
-            isDarkTheme: true
+            isDarkTheme: true,
+            streak: 0,
+            level: 1,
+            pixelSize: 18,
+            pixelColor: '#ff4757',
+            pixelShape: 'square',
+            soundEnabled: true,
+            hapticsEnabled: true,
+            achievements: {
+                first10: false,
+                speedDemon: false,
+                pixelMaster: false,
+                streakMaster: false
+            },
+            powerupActive: false,
+            powerupRounds: 0
         };
 
         // DOM Elements
@@ -181,13 +328,26 @@
         const finalScoreElement = document.getElementById('final-score');
         const highScoreElement = document.getElementById('high-score');
         const themeToggle = document.getElementById('theme-toggle');
+        const streakCounter = document.getElementById('streak-counter');
+        const settingsPanel = document.getElementById('settings-panel');
+        const shareButton = document.getElementById('share-button');
+        const toggleSound = document.getElementById('toggle-sound');
+        const toggleHaptics = document.getElementById('toggle-haptics');
+
+        // Audio elements
         const popSound = document.getElementById('pop-sound');
+        const bonusSound = document.getElementById('bonus-sound');
+        const powerupSound = document.getElementById('powerup-sound');
+        const levelUpSound = document.getElementById('level-up-sound');
 
         // Event Listeners
         startButton.addEventListener('click', startGame);
         playAgainButton.addEventListener('click', startGame);
         themeToggle.addEventListener('click', toggleTheme);
         gameArea.addEventListener('click', handleGameAreaClick);
+        shareButton.addEventListener('click', shareScore);
+        toggleSound.addEventListener('click', toggleSoundSetting);
+        toggleHaptics.addEventListener('click', toggleHapticsSetting);
 
         // Initialize high score display
         highScoreElement.textContent = gameState.highScore;
@@ -195,6 +355,16 @@
         function startGame() {
             gameState.score = 0;
             gameState.timeLimit = 1200;
+            gameState.streak = 0;
+            gameState.level = 1;
+            gameState.pixelSize = 18;
+            gameState.powerupActive = false;
+            gameState.powerupRounds = 0;
+            
+            // Reset achievements display
+            document.getElementById('achievements').innerHTML = '';
+            document.getElementById('game-over-achievements').innerHTML = '';
+            
             showScreen(gameScreen);
             spawnPixel();
         }
@@ -207,9 +377,25 @@
             const pixel = document.createElement('div');
             pixel.className = 'pixel';
             
+            // Randomly determine if this should be a bonus or powerup pixel
+            const random = Math.random();
+            if (random < 0.1) { // 10% chance for bonus
+                pixel.classList.add('bonus');
+            } else if (random < 0.15) { // 5% chance for powerup
+                pixel.classList.add('powerup');
+            }
+            
+            // Apply custom styling
+            pixel.style.width = `${gameState.pixelSize}px`;
+            pixel.style.height = `${gameState.pixelSize}px`;
+            pixel.style.backgroundColor = gameState.pixelColor;
+            if (gameState.pixelShape === 'circle') {
+                pixel.style.borderRadius = '50%';
+            }
+            
             // Calculate random position ensuring pixel stays within viewport
-            const maxX = window.innerWidth - 18;
-            const maxY = window.innerHeight - 18;
+            const maxX = window.innerWidth - gameState.pixelSize;
+            const maxY = window.innerHeight - gameState.pixelSize;
             const x = Math.floor(Math.random() * maxX);
             const y = Math.floor(Math.random() * maxY);
             
@@ -224,9 +410,12 @@
                 clearTimeout(gameState.timer);
             }
             
+            const currentTimeLimit = gameState.powerupActive ? 
+                gameState.timeLimit * 1.5 : gameState.timeLimit;
+            
             gameState.timer = setTimeout(() => {
                 gameOver();
-            }, gameState.timeLimit);
+            }, currentTimeLimit);
         }
 
         function handleGameAreaClick(event) {
@@ -245,19 +434,160 @@
             ) {
                 // Successful click
                 pixel.classList.add('clicked');
-                popSound.currentTime = 0;
-                popSound.play();
                 
-                gameState.score++;
-                gameState.timeLimit = Math.max(350, gameState.timeLimit - 50);
+                // Play appropriate sound
+                if (gameState.soundEnabled) {
+                    if (pixel.classList.contains('bonus')) {
+                        bonusSound.currentTime = 0;
+                        bonusSound.play();
+                    } else if (pixel.classList.contains('powerup')) {
+                        powerupSound.currentTime = 0;
+                        powerupSound.play();
+                    } else {
+                        popSound.currentTime = 0;
+                        popSound.play();
+                    }
+                }
+
+                // Haptic feedback
+                if (gameState.hapticsEnabled && navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+                
+                // Update score and streak
+                gameState.streak++;
+                if (pixel.classList.contains('bonus')) {
+                    gameState.score += 3;
+                } else {
+                    gameState.score++;
+                }
+
+                // Check for streak bonus
+                if (gameState.streak % 5 === 0) {
+                    gameState.score += 2; // Bonus points for streaks
+                    showStreakMessage();
+                }
+
+                // Handle powerup
+                if (pixel.classList.contains('powerup')) {
+                    gameState.powerupActive = true;
+                    gameState.powerupRounds = 3;
+                }
+
+                // Check level up
+                if (gameState.score % 10 === 0) {
+                    levelUp();
+                }
+
+                // Check achievements
+                checkAchievements();
+                
+                // Update time limit
+                if (!gameState.powerupActive) {
+                    gameState.timeLimit = Math.max(350, gameState.timeLimit - 50);
+                } else {
+                    gameState.powerupRounds--;
+                    if (gameState.powerupRounds <= 0) {
+                        gameState.powerupActive = false;
+                    }
+                }
                 
                 setTimeout(() => {
                     spawnPixel();
                 }, 200);
             } else {
                 // Missed click
+                gameState.streak = 0;
+                streakCounter.classList.remove('visible');
                 gameOver();
             }
+        }
+
+        function levelUp() {
+            gameState.level++;
+            gameState.pixelSize = Math.max(12, gameState.pixelSize - 1);
+            
+            if (gameState.soundEnabled) {
+                levelUpSound.currentTime = 0;
+                levelUpSound.play();
+            }
+            
+            // Create confetti effect
+            createConfetti();
+            
+            // Show level up message
+            const levelUpMessage = document.createElement('div');
+            levelUpMessage.textContent = `Level ${gameState.level}!`;
+            levelUpMessage.style.position = 'fixed';
+            levelUpMessage.style.top = '50%';
+            levelUpMessage.style.left = '50%';
+            levelUpMessage.style.transform = 'translate(-50%, -50%)';
+            levelUpMessage.style.fontSize = '3rem';
+            levelUpMessage.style.color = '#ffa502';
+            levelUpMessage.style.animation = 'fadeOut 2s forwards';
+            document.body.appendChild(levelUpMessage);
+            
+            setTimeout(() => {
+                levelUpMessage.remove();
+            }, 2000);
+        }
+
+        function createConfetti() {
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * window.innerWidth + 'px';
+                confetti.style.top = Math.random() * window.innerHeight + 'px';
+                confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                confetti.style.animation = `fall ${Math.random() * 3 + 2}s linear forwards`;
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => {
+                    confetti.remove();
+                }, 5000);
+            }
+        }
+
+        function checkAchievements() {
+            if (!gameState.achievements.first10 && gameState.score >= 10) {
+                unlockAchievement('First 10!');
+                gameState.achievements.first10 = true;
+            }
+            
+            if (!gameState.achievements.speedDemon && gameState.timeLimit <= 400) {
+                unlockAchievement('Speed Demon!');
+                gameState.achievements.speedDemon = true;
+            }
+            
+            if (!gameState.achievements.pixelMaster && gameState.score >= 50) {
+                unlockAchievement('Pixel Master!');
+                gameState.achievements.pixelMaster = true;
+            }
+            
+            if (!gameState.achievements.streakMaster && gameState.streak >= 10) {
+                unlockAchievement('Streak Master!');
+                gameState.achievements.streakMaster = true;
+            }
+        }
+
+        function unlockAchievement(name) {
+            const achievement = document.createElement('div');
+            achievement.className = 'achievement';
+            achievement.textContent = name;
+            document.getElementById('achievements').appendChild(achievement);
+            
+            setTimeout(() => {
+                achievement.classList.add('unlocked');
+            }, 100);
+        }
+
+        function showStreakMessage() {
+            streakCounter.textContent = `Streak x${gameState.streak}!`;
+            streakCounter.classList.add('visible');
+            
+            setTimeout(() => {
+                streakCounter.classList.remove('visible');
+            }, 1000);
         }
 
         function gameOver() {
@@ -268,6 +598,19 @@
             }
 
             finalScoreElement.textContent = gameState.score;
+            
+            // Show achievements on game over screen
+            const gameOverAchievements = document.getElementById('game-over-achievements');
+            gameOverAchievements.innerHTML = '';
+            Object.entries(gameState.achievements).forEach(([key, unlocked]) => {
+                if (unlocked) {
+                    const achievement = document.createElement('div');
+                    achievement.className = 'achievement unlocked';
+                    achievement.textContent = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    gameOverAchievements.appendChild(achievement);
+                }
+            });
+            
             showScreen(gameOverScreen);
             
             if (gameState.timer) {
@@ -292,12 +635,49 @@
             document.body.classList.toggle('light-theme');
         }
 
+        function toggleSoundSetting() {
+            gameState.soundEnabled = !gameState.soundEnabled;
+            toggleSound.textContent = `Sound: ${gameState.soundEnabled ? 'On' : 'Off'}`;
+        }
+
+        function toggleHapticsSetting() {
+            gameState.hapticsEnabled = !gameState.hapticsEnabled;
+            toggleHaptics.textContent = `Haptics: ${gameState.hapticsEnabled ? 'On' : 'Off'}`;
+        }
+
+        function shareScore() {
+            const text = `I scored ${gameState.score} points in Pixel Pounce! Can you beat my score?`;
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Pixel Pounce Score',
+                    text: text
+                });
+            } else {
+                navigator.clipboard.writeText(text);
+                alert('Score copied to clipboard!');
+            }
+        }
+
         // Handle window resize
         window.addEventListener('resize', () => {
             if (gameState.pixel) {
                 spawnPixel();
             }
         });
+
+        // Add CSS for confetti animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fall {
+                from { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+                to { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                to { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html> 
