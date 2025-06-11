@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Pounce</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        .pixel {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background-color: #ff4757;
+            border-radius: 2px;
+            transform: scale(0);
+            animation: popIn 0.2s ease forwards;
+        }
+
+        .pixel.clicked {
+            animation: popOut 0.2s ease forwards;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0); }
+            to { transform: scale(1); }
+        }
+
+        @keyframes popOut {
+            from { transform: scale(1); }
+            to { transform: scale(1.5); opacity: 0; }
+        }
+
+        button {
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            background-color: #ff6b81;
+        }
+
+        .score {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        .high-score {
+            font-size: 1.2rem;
+            color: #ffa502;
+            margin-bottom: 30px;
+        }
+
+        .game-over .score {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .game-over .high-score {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: 2px solid #ff4757;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+
+        body.light-theme {
+            background-color: #f1f2f6;
+            color: #2f3542;
+        }
+
+        body.light-theme .pixel {
+            background-color: #2ed573;
+        }
+
+        body.light-theme button {
+            background-color: #2ed573;
+        }
+
+        body.light-theme button:hover {
+            background-color: #7bed9f;
+        }
+
+        body.light-theme .theme-toggle {
+            border-color: #2ed573;
+            color: #2f3542;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen" class="screen">
+        <h1>Pixel Pounce</h1>
+        <button id="start-button">Start Game</button>
+    </div>
+
+    <div id="game-screen" class="screen hidden">
+        <div class="game-area" id="game-area"></div>
+    </div>
+
+    <div id="game-over-screen" class="screen hidden">
+        <div class="score">Score: <span id="final-score">0</span></div>
+        <div class="high-score">High Score: <span id="high-score">0</span></div>
+        <button id="play-again-button">Play Again</button>
+    </div>
+
+    <button class="theme-toggle" id="theme-toggle">Toggle Theme</button>
+
+    <audio id="pop-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
+
+    <script>
+        // Game state
+        let gameState = {
+            score: 0,
+            highScore: localStorage.getItem('highScore') || 0,
+            timer: null,
+            timeLimit: 1200,
+            pixel: null,
+            isDarkTheme: true
+        };
+
+        // DOM Elements
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gameArea = document.getElementById('game-area');
+        const startButton = document.getElementById('start-button');
+        const playAgainButton = document.getElementById('play-again-button');
+        const finalScoreElement = document.getElementById('final-score');
+        const highScoreElement = document.getElementById('high-score');
+        const themeToggle = document.getElementById('theme-toggle');
+        const popSound = document.getElementById('pop-sound');
+
+        // Event Listeners
+        startButton.addEventListener('click', startGame);
+        playAgainButton.addEventListener('click', startGame);
+        themeToggle.addEventListener('click', toggleTheme);
+        gameArea.addEventListener('click', handleGameAreaClick);
+
+        // Initialize high score display
+        highScoreElement.textContent = gameState.highScore;
+
+        function startGame() {
+            gameState.score = 0;
+            gameState.timeLimit = 1200;
+            showScreen(gameScreen);
+            spawnPixel();
+        }
+
+        function spawnPixel() {
+            if (gameState.pixel) {
+                gameState.pixel.remove();
+            }
+
+            const pixel = document.createElement('div');
+            pixel.className = 'pixel';
+            
+            // Calculate random position ensuring pixel stays within viewport
+            const maxX = window.innerWidth - 18;
+            const maxY = window.innerHeight - 18;
+            const x = Math.floor(Math.random() * maxX);
+            const y = Math.floor(Math.random() * maxY);
+            
+            pixel.style.left = `${x}px`;
+            pixel.style.top = `${y}px`;
+            
+            gameArea.appendChild(pixel);
+            gameState.pixel = pixel;
+
+            // Start timer
+            if (gameState.timer) {
+                clearTimeout(gameState.timer);
+            }
+            
+            gameState.timer = setTimeout(() => {
+                gameOver();
+            }, gameState.timeLimit);
+        }
+
+        function handleGameAreaClick(event) {
+            const pixel = gameState.pixel;
+            if (!pixel) return;
+
+            const rect = pixel.getBoundingClientRect();
+            const clickedX = event.clientX;
+            const clickedY = event.clientY;
+
+            if (
+                clickedX >= rect.left &&
+                clickedX <= rect.right &&
+                clickedY >= rect.top &&
+                clickedY <= rect.bottom
+            ) {
+                // Successful click
+                pixel.classList.add('clicked');
+                popSound.currentTime = 0;
+                popSound.play();
+                
+                gameState.score++;
+                gameState.timeLimit = Math.max(350, gameState.timeLimit - 50);
+                
+                setTimeout(() => {
+                    spawnPixel();
+                }, 200);
+            } else {
+                // Missed click
+                gameOver();
+            }
+        }
+
+        function gameOver() {
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = gameState.score;
+                localStorage.setItem('highScore', gameState.highScore);
+                highScoreElement.textContent = gameState.highScore;
+            }
+
+            finalScoreElement.textContent = gameState.score;
+            showScreen(gameOverScreen);
+            
+            if (gameState.timer) {
+                clearTimeout(gameState.timer);
+            }
+            
+            if (gameState.pixel) {
+                gameState.pixel.remove();
+                gameState.pixel = null;
+            }
+        }
+
+        function showScreen(screen) {
+            [startScreen, gameScreen, gameOverScreen].forEach(s => {
+                s.classList.add('hidden');
+            });
+            screen.classList.remove('hidden');
+        }
+
+        function toggleTheme() {
+            gameState.isDarkTheme = !gameState.isDarkTheme;
+            document.body.classList.toggle('light-theme');
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (gameState.pixel) {
+                spawnPixel();
+            }
+        });
+    </script>
+</body>
+</html> 
