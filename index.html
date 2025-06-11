@@ -172,6 +172,38 @@
             animation: pulse 1s infinite;
         }
 
+        .lives-display {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 5px;
+        }
+
+        .life {
+            width: 20px;
+            height: 20px;
+            background-color: #ff4757;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .life.lost {
+            transform: scale(0);
+            opacity: 0;
+        }
+
+        .speed-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.9rem;
+            color: #ff4757;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 10px;
+        }
+
         .achievements {
             position: fixed;
             bottom: 20px;
@@ -268,6 +300,23 @@
             padding: 5px 10px;
             font-size: 0.8rem;
         }
+
+        .miss-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            color: #ff4757;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .miss-feedback.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -280,6 +329,12 @@
         <div class="game-area" id="game-area"></div>
         <div class="streak-counter" id="streak-counter"></div>
         <div class="level-display" id="level-display">Level 1</div>
+        <div class="lives-display" id="lives-display">
+            <div class="life"></div>
+            <div class="life"></div>
+            <div class="life"></div>
+        </div>
+        <div class="speed-indicator" id="speed-indicator">Speed: 1x</div>
         <div class="achievements" id="achievements"></div>
     </div>
 
@@ -309,6 +364,7 @@
     <audio id="bonus-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
     <audio id="powerup-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
     <audio id="level-up-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
+    <audio id="miss-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
 
     <script>
         // Game state
@@ -316,12 +372,13 @@
             score: 0,
             highScore: localStorage.getItem('highScore') || 0,
             timer: null,
-            timeLimit: 2000,
+            timeLimit: 4000,
             pixel: null,
             isDarkTheme: true,
             streak: 0,
             level: 1,
-            maxLevel: 20, // Maximum level cap
+            lives: 3,
+            speedMultiplier: 1,
             pixelSize: 24,
             pixelColor: '#ff4757',
             pixelShape: 'square',
@@ -331,8 +388,7 @@
                 first10: false,
                 speedDemon: false,
                 pixelMaster: false,
-                streakMaster: false,
-                maxLevel: false // New achievement for reaching max level
+                streakMaster: false
             },
             powerupActive: false,
             powerupRounds: 0
@@ -350,6 +406,8 @@
         const themeToggle = document.getElementById('theme-toggle');
         const streakCounter = document.getElementById('streak-counter');
         const levelDisplay = document.getElementById('level-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const speedIndicator = document.getElementById('speed-indicator');
         const settingsPanel = document.getElementById('settings-panel');
         const shareButton = document.getElementById('share-button');
         const toggleSound = document.getElementById('toggle-sound');
@@ -360,6 +418,7 @@
         const bonusSound = document.getElementById('bonus-sound');
         const powerupSound = document.getElementById('powerup-sound');
         const levelUpSound = document.getElementById('level-up-sound');
+        const missSound = document.getElementById('miss-sound');
 
         // Event Listeners
         startButton.addEventListener('click', startGame);
@@ -375,12 +434,19 @@
 
         function startGame() {
             gameState.score = 0;
-            gameState.timeLimit = 2000;
+            gameState.timeLimit = 4000;
             gameState.streak = 0;
             gameState.level = 1;
+            gameState.lives = 3;
+            gameState.speedMultiplier = 1;
             gameState.pixelSize = 24;
             gameState.powerupActive = false;
             gameState.powerupRounds = 0;
+            
+            // Reset lives display
+            document.querySelectorAll('.life').forEach(life => {
+                life.classList.remove('lost');
+            });
             
             // Reset achievements display
             document.getElementById('achievements').innerHTML = '';
@@ -388,7 +454,7 @@
             
             // Reset level display
             levelDisplay.textContent = 'Level 1';
-            levelDisplay.classList.remove('max-level');
+            speedIndicator.textContent = 'Speed: 1x';
             
             showScreen(gameScreen);
             spawnPixel();
@@ -439,7 +505,53 @@
                 gameState.timeLimit * 1.5 : gameState.timeLimit;
             
             gameState.timer = setTimeout(() => {
-                gameOver();
+                // Instead of game over, count it as a miss
+                gameState.streak = 0;
+                streakCounter.classList.remove('visible');
+                
+                // Play miss sound
+                if (gameState.soundEnabled) {
+                    missSound.currentTime = 0;
+                    missSound.play();
+                }
+
+                // Haptic feedback for miss
+                if (gameState.hapticsEnabled && navigator.vibrate) {
+                    navigator.vibrate(200);
+                }
+                
+                // Lose a life
+                gameState.lives--;
+                const lives = document.querySelectorAll('.life');
+                lives[gameState.lives].classList.add('lost');
+                
+                // Show miss feedback
+                const missFeedback = document.createElement('div');
+                missFeedback.className = 'miss-feedback';
+                missFeedback.textContent = `Time's up! ${gameState.lives} ${gameState.lives === 1 ? 'life' : 'lives'} remaining`;
+                document.body.appendChild(missFeedback);
+                
+                // Animate the feedback
+                setTimeout(() => {
+                    missFeedback.classList.add('visible');
+                }, 100);
+                
+                // Remove the feedback after animation
+                setTimeout(() => {
+                    missFeedback.classList.remove('visible');
+                    setTimeout(() => {
+                        missFeedback.remove();
+                    }, 300);
+                }, 2000);
+                
+                if (gameState.lives <= 0) {
+                    gameOver();
+                } else {
+                    // Continue playing with current difficulty
+                    setTimeout(() => {
+                        spawnPixel();
+                    }, 200);
+                }
             }, currentTimeLimit);
         }
 
@@ -507,10 +619,14 @@
                 // Check achievements
                 checkAchievements();
                 
-                // Update time limit with gentler progression
+                // Update time limit with progressive difficulty
                 if (!gameState.powerupActive) {
-                    // Slower time reduction based on level
-                    const timeReduction = Math.max(20, 50 - (gameState.level * 2));
+                    // Increase speed multiplier
+                    gameState.speedMultiplier = 1 + (gameState.level * 0.1);
+                    speedIndicator.textContent = `Speed: ${gameState.speedMultiplier.toFixed(1)}x`;
+                    
+                    // More gradual time reduction based on level
+                    const timeReduction = Math.max(20, 30 + (gameState.level * 1.5));
                     gameState.timeLimit = Math.max(500, gameState.timeLimit - timeReduction);
                 } else {
                     gameState.powerupRounds--;
@@ -526,49 +642,84 @@
                 // Missed click
                 gameState.streak = 0;
                 streakCounter.classList.remove('visible');
-                gameOver();
+                
+                // Play miss sound
+                if (gameState.soundEnabled) {
+                    missSound.currentTime = 0;
+                    missSound.play();
+                }
+
+                // Haptic feedback for miss
+                if (gameState.hapticsEnabled && navigator.vibrate) {
+                    navigator.vibrate(200); // Longer vibration for miss
+                }
+                
+                // Lose a life
+                gameState.lives--;
+                const lives = document.querySelectorAll('.life');
+                lives[gameState.lives].classList.add('lost');
+                
+                // Show miss feedback
+                const missFeedback = document.createElement('div');
+                missFeedback.className = 'miss-feedback';
+                missFeedback.textContent = `Miss! ${gameState.lives} ${gameState.lives === 1 ? 'life' : 'lives'} remaining`;
+                document.body.appendChild(missFeedback);
+                
+                // Animate the feedback
+                setTimeout(() => {
+                    missFeedback.classList.add('visible');
+                }, 100);
+                
+                // Remove the feedback after animation
+                setTimeout(() => {
+                    missFeedback.classList.remove('visible');
+                    setTimeout(() => {
+                        missFeedback.remove();
+                    }, 300);
+                }, 2000);
+                
+                if (gameState.lives <= 0) {
+                    gameOver();
+                } else {
+                    // Continue playing with current difficulty
+                    setTimeout(() => {
+                        spawnPixel();
+                    }, 200);
+                }
             }
         }
 
         function levelUp() {
-            if (gameState.level < gameState.maxLevel) {
-                gameState.level++;
-                // Gentler pixel size reduction
-                gameState.pixelSize = Math.max(14, gameState.pixelSize - 1);
-                
-                // Update level display
-                levelDisplay.textContent = `Level ${gameState.level}`;
-                
-                if (gameState.level === gameState.maxLevel) {
-                    levelDisplay.classList.add('max-level');
-                    unlockAchievement('Max Level Reached!');
-                    gameState.achievements.maxLevel = true;
-                }
-                
-                if (gameState.soundEnabled) {
-                    levelUpSound.currentTime = 0;
-                    levelUpSound.play();
-                }
-                
-                // Create confetti effect
-                createConfetti();
-                
-                // Show level up message
-                const levelUpMessage = document.createElement('div');
-                levelUpMessage.textContent = `Level ${gameState.level}!`;
-                levelUpMessage.style.position = 'fixed';
-                levelUpMessage.style.top = '50%';
-                levelUpMessage.style.left = '50%';
-                levelUpMessage.style.transform = 'translate(-50%, -50%)';
-                levelUpMessage.style.fontSize = '3rem';
-                levelUpMessage.style.color = '#ffa502';
-                levelUpMessage.style.animation = 'fadeOut 2s forwards';
-                document.body.appendChild(levelUpMessage);
-                
-                setTimeout(() => {
-                    levelUpMessage.remove();
-                }, 2000);
+            gameState.level++;
+            // Progressive pixel size reduction
+            gameState.pixelSize = Math.max(12, gameState.pixelSize - 0.5);
+            
+            // Update level display
+            levelDisplay.textContent = `Level ${gameState.level}`;
+            
+            if (gameState.soundEnabled) {
+                levelUpSound.currentTime = 0;
+                levelUpSound.play();
             }
+            
+            // Create confetti effect
+            createConfetti();
+            
+            // Show level up message
+            const levelUpMessage = document.createElement('div');
+            levelUpMessage.textContent = `Level ${gameState.level}!`;
+            levelUpMessage.style.position = 'fixed';
+            levelUpMessage.style.top = '50%';
+            levelUpMessage.style.left = '50%';
+            levelUpMessage.style.transform = 'translate(-50%, -50%)';
+            levelUpMessage.style.fontSize = '3rem';
+            levelUpMessage.style.color = '#ffa502';
+            levelUpMessage.style.animation = 'fadeOut 2s forwards';
+            document.body.appendChild(levelUpMessage);
+            
+            setTimeout(() => {
+                levelUpMessage.remove();
+            }, 2000);
         }
 
         function createConfetti() {
