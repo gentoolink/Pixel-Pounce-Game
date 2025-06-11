@@ -360,11 +360,11 @@
         <button id="pixel-shape-circle">Circle</button>
     </div>
 
-    <audio id="pop-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
-    <audio id="bonus-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
-    <audio id="powerup-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
-    <audio id="level-up-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
-    <audio id="miss-sound" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" preload="auto"></audio>
+    <audio id="pop-sound" src="sounds/pop.wav" preload="auto"></audio>
+    <audio id="bonus-sound" src="sounds/bonus.wav" preload="auto"></audio>
+    <audio id="powerup-sound" src="sounds/powerup.wav" preload="auto"></audio>
+    <audio id="level-up-sound" src="sounds/level-up.wav" preload="auto"></audio>
+    <audio id="miss-sound" src="sounds/miss.wav" preload="auto"></audio>
 
     <script>
         // Game state
@@ -484,14 +484,10 @@
                 pixel.style.borderRadius = '50%';
             }
             
-            // Calculate random position ensuring pixel stays within viewport
-            const maxX = window.innerWidth - gameState.pixelSize;
-            const maxY = window.innerHeight - gameState.pixelSize;
-            const x = Math.floor(Math.random() * maxX);
-            const y = Math.floor(Math.random() * maxY);
-            
-            pixel.style.left = `${x}px`;
-            pixel.style.top = `${y}px`;
+            // Find a safe position for the pixel
+            let safePosition = findSafePosition();
+            pixel.style.left = `${safePosition.x}px`;
+            pixel.style.top = `${safePosition.y}px`;
             
             gameArea.appendChild(pixel);
             gameState.pixel = pixel;
@@ -553,6 +549,65 @@
                     }, 200);
                 }
             }, currentTimeLimit);
+        }
+
+        function findSafePosition() {
+            const maxX = window.innerWidth - gameState.pixelSize;
+            const maxY = window.innerHeight - gameState.pixelSize;
+            const padding = 20; // Padding around UI elements
+            
+            // Get all buttons and UI elements
+            const buttons = document.querySelectorAll('button');
+            const uiElements = document.querySelectorAll('.streak-counter, .level-display, .lives-display, .speed-indicator, .achievements, .accessibility-controls, .settings-panel');
+            
+            let attempts = 0;
+            const maxAttempts = 50;
+            
+            while (attempts < maxAttempts) {
+                const x = Math.floor(Math.random() * maxX);
+                const y = Math.floor(Math.random() * maxY);
+                
+                // Check if position overlaps with any UI element
+                let isSafe = true;
+                
+                // Check buttons
+                buttons.forEach(button => {
+                    const rect = button.getBoundingClientRect();
+                    if (
+                        x + gameState.pixelSize + padding > rect.left &&
+                        x - padding < rect.right &&
+                        y + gameState.pixelSize + padding > rect.top &&
+                        y - padding < rect.bottom
+                    ) {
+                        isSafe = false;
+                    }
+                });
+                
+                // Check other UI elements
+                uiElements.forEach(element => {
+                    const rect = element.getBoundingClientRect();
+                    if (
+                        x + gameState.pixelSize + padding > rect.left &&
+                        x - padding < rect.right &&
+                        y + gameState.pixelSize + padding > rect.top &&
+                        y - padding < rect.bottom
+                    ) {
+                        isSafe = false;
+                    }
+                });
+                
+                if (isSafe) {
+                    return { x, y };
+                }
+                
+                attempts++;
+            }
+            
+            // If no safe position found after max attempts, return a default position
+            return {
+                x: Math.floor(maxX / 2),
+                y: Math.floor(maxY / 2)
+            };
         }
 
         function handleGameAreaClick(event) {
