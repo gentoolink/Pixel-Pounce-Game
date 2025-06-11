@@ -155,6 +155,23 @@
             opacity: 1;
         }
 
+        .level-display {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.2rem;
+            color: #ff4757;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 15px;
+            border-radius: 15px;
+        }
+
+        .level-display.max-level {
+            color: #ffa502;
+            animation: pulse 1s infinite;
+        }
+
         .achievements {
             position: fixed;
             bottom: 20px;
@@ -262,6 +279,7 @@
     <div id="game-screen" class="screen hidden">
         <div class="game-area" id="game-area"></div>
         <div class="streak-counter" id="streak-counter"></div>
+        <div class="level-display" id="level-display">Level 1</div>
         <div class="achievements" id="achievements"></div>
     </div>
 
@@ -298,12 +316,13 @@
             score: 0,
             highScore: localStorage.getItem('highScore') || 0,
             timer: null,
-            timeLimit: 1200,
+            timeLimit: 2000,
             pixel: null,
             isDarkTheme: true,
             streak: 0,
             level: 1,
-            pixelSize: 18,
+            maxLevel: 20, // Maximum level cap
+            pixelSize: 24,
             pixelColor: '#ff4757',
             pixelShape: 'square',
             soundEnabled: true,
@@ -312,7 +331,8 @@
                 first10: false,
                 speedDemon: false,
                 pixelMaster: false,
-                streakMaster: false
+                streakMaster: false,
+                maxLevel: false // New achievement for reaching max level
             },
             powerupActive: false,
             powerupRounds: 0
@@ -329,6 +349,7 @@
         const highScoreElement = document.getElementById('high-score');
         const themeToggle = document.getElementById('theme-toggle');
         const streakCounter = document.getElementById('streak-counter');
+        const levelDisplay = document.getElementById('level-display');
         const settingsPanel = document.getElementById('settings-panel');
         const shareButton = document.getElementById('share-button');
         const toggleSound = document.getElementById('toggle-sound');
@@ -354,16 +375,20 @@
 
         function startGame() {
             gameState.score = 0;
-            gameState.timeLimit = 1200;
+            gameState.timeLimit = 2000;
             gameState.streak = 0;
             gameState.level = 1;
-            gameState.pixelSize = 18;
+            gameState.pixelSize = 24;
             gameState.powerupActive = false;
             gameState.powerupRounds = 0;
             
             // Reset achievements display
             document.getElementById('achievements').innerHTML = '';
             document.getElementById('game-over-achievements').innerHTML = '';
+            
+            // Reset level display
+            levelDisplay.textContent = 'Level 1';
+            levelDisplay.classList.remove('max-level');
             
             showScreen(gameScreen);
             spawnPixel();
@@ -482,9 +507,11 @@
                 // Check achievements
                 checkAchievements();
                 
-                // Update time limit
+                // Update time limit with gentler progression
                 if (!gameState.powerupActive) {
-                    gameState.timeLimit = Math.max(350, gameState.timeLimit - 50);
+                    // Slower time reduction based on level
+                    const timeReduction = Math.max(20, 50 - (gameState.level * 2));
+                    gameState.timeLimit = Math.max(500, gameState.timeLimit - timeReduction);
                 } else {
                     gameState.powerupRounds--;
                     if (gameState.powerupRounds <= 0) {
@@ -504,32 +531,44 @@
         }
 
         function levelUp() {
-            gameState.level++;
-            gameState.pixelSize = Math.max(12, gameState.pixelSize - 1);
-            
-            if (gameState.soundEnabled) {
-                levelUpSound.currentTime = 0;
-                levelUpSound.play();
+            if (gameState.level < gameState.maxLevel) {
+                gameState.level++;
+                // Gentler pixel size reduction
+                gameState.pixelSize = Math.max(14, gameState.pixelSize - 1);
+                
+                // Update level display
+                levelDisplay.textContent = `Level ${gameState.level}`;
+                
+                if (gameState.level === gameState.maxLevel) {
+                    levelDisplay.classList.add('max-level');
+                    unlockAchievement('Max Level Reached!');
+                    gameState.achievements.maxLevel = true;
+                }
+                
+                if (gameState.soundEnabled) {
+                    levelUpSound.currentTime = 0;
+                    levelUpSound.play();
+                }
+                
+                // Create confetti effect
+                createConfetti();
+                
+                // Show level up message
+                const levelUpMessage = document.createElement('div');
+                levelUpMessage.textContent = `Level ${gameState.level}!`;
+                levelUpMessage.style.position = 'fixed';
+                levelUpMessage.style.top = '50%';
+                levelUpMessage.style.left = '50%';
+                levelUpMessage.style.transform = 'translate(-50%, -50%)';
+                levelUpMessage.style.fontSize = '3rem';
+                levelUpMessage.style.color = '#ffa502';
+                levelUpMessage.style.animation = 'fadeOut 2s forwards';
+                document.body.appendChild(levelUpMessage);
+                
+                setTimeout(() => {
+                    levelUpMessage.remove();
+                }, 2000);
             }
-            
-            // Create confetti effect
-            createConfetti();
-            
-            // Show level up message
-            const levelUpMessage = document.createElement('div');
-            levelUpMessage.textContent = `Level ${gameState.level}!`;
-            levelUpMessage.style.position = 'fixed';
-            levelUpMessage.style.top = '50%';
-            levelUpMessage.style.left = '50%';
-            levelUpMessage.style.transform = 'translate(-50%, -50%)';
-            levelUpMessage.style.fontSize = '3rem';
-            levelUpMessage.style.color = '#ffa502';
-            levelUpMessage.style.animation = 'fadeOut 2s forwards';
-            document.body.appendChild(levelUpMessage);
-            
-            setTimeout(() => {
-                levelUpMessage.remove();
-            }, 2000);
         }
 
         function createConfetti() {
@@ -680,4 +719,4 @@
         document.head.appendChild(style);
     </script>
 </body>
-</html> 
+</html>
