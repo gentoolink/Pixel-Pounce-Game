@@ -320,6 +320,37 @@
         .miss-feedback.visible {
             opacity: 1;
         }
+
+        .high-scores {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .high-scores h2 {
+            color: #ffa502;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .high-score-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .high-score-item:last-child {
+            border-bottom: none;
+        }
+
+        .high-score-date {
+            font-size: 0.8rem;
+            color: #ffa502;
+        }
     </style>
 </head>
 <body>
@@ -344,6 +375,10 @@
     <div id="game-over-screen" class="screen hidden">
         <div class="score">Score: <span id="final-score">0</span></div>
         <div class="high-score">High Score: <span id="high-score">0</span></div>
+        <div class="high-scores">
+            <h2>Top Scores</h2>
+            <div id="high-scores-list"></div>
+        </div>
         <div class="achievements" id="game-over-achievements"></div>
         <button id="play-again-button">Play Again</button>
         <button class="share-button" id="share-button">Share Score</button>
@@ -374,6 +409,7 @@
         let gameState = {
             score: 0,
             highScore: localStorage.getItem('highScore') || 0,
+            highScores: JSON.parse(localStorage.getItem('highScores')) || [],
             timer: null,
             timeLimit: 4000,
             pixel: null,
@@ -837,11 +873,40 @@
         }
 
         function gameOver() {
+            // Update high score if current score is higher
             if (gameState.score > gameState.highScore) {
                 gameState.highScore = gameState.score;
                 localStorage.setItem('highScore', gameState.highScore);
                 highScoreElement.textContent = gameState.highScore;
             }
+
+            // Add current score to high scores list
+            const newScore = {
+                score: gameState.score,
+                date: new Date().toLocaleDateString(),
+                level: gameState.level
+            };
+            
+            gameState.highScores.push(newScore);
+            // Sort scores in descending order
+            gameState.highScores.sort((a, b) => b.score - a.score);
+            // Keep only top 5 scores
+            gameState.highScores = gameState.highScores.slice(0, 5);
+            // Save to localStorage
+            localStorage.setItem('highScores', JSON.stringify(gameState.highScores));
+
+            // Update high scores display
+            const highScoresList = document.getElementById('high-scores-list');
+            highScoresList.innerHTML = '';
+            gameState.highScores.forEach((score, index) => {
+                const scoreElement = document.createElement('div');
+                scoreElement.className = 'high-score-item';
+                scoreElement.innerHTML = `
+                    <span>${index + 1}. ${score.score} (Level ${score.level})</span>
+                    <span class="high-score-date">${score.date}</span>
+                `;
+                highScoresList.appendChild(scoreElement);
+            });
 
             finalScoreElement.textContent = gameState.score;
             
