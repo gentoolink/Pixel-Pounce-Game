@@ -809,9 +809,22 @@
             levelUpMessage.style.animation = 'fadeOut 2s forwards';
             document.body.appendChild(levelUpMessage);
             
+            // Clear existing pixel and timer
+            if (gameState.pixel) {
+                gameState.pixel.remove();
+                gameState.pixel = null;
+            }
+            if (gameState.timer) {
+                clearTimeout(gameState.timer);
+            }
+            
+            // Wait for animations to complete before spawning next pixel
             setTimeout(() => {
                 levelUpMessage.remove();
-            }, 2000);
+                // Clear any remaining confetti
+                document.querySelectorAll('.confetti').forEach(confetti => confetti.remove());
+                spawnPixel();
+            }, 2500); // 2.5 second delay to allow animations to complete
         }
 
         function createConfetti() {
