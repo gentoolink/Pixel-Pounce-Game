@@ -828,10 +828,31 @@
             // Wait for animations to complete before spawning next pixel
             setTimeout(() => {
                 levelUpMessage.remove();
-                // Clear any remaining confetti
-                document.querySelectorAll('.confetti').forEach(confetti => confetti.remove());
-                spawnPixel();
-            }, 2500); // 2.5 second delay to allow animations to complete
+                // Wait for all confetti to fall before spawning next pixel
+                const confettiElements = document.querySelectorAll('.confetti');
+                if (confettiElements.length > 0) {
+                    // Set up a MutationObserver to watch for confetti removal
+                    const observer = new MutationObserver((mutations) => {
+                        if (document.querySelectorAll('.confetti').length === 0) {
+                            observer.disconnect();
+                            spawnPixel();
+                        }
+                    });
+                    
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                    
+                    // Fallback timeout in case observer doesn't catch all removals
+                    setTimeout(() => {
+                        observer.disconnect();
+                        spawnPixel();
+                    }, 5000); // Maximum wait time of 5 seconds
+                } else {
+                    spawnPixel();
+                }
+            }, 2000); // 2 second delay for level up message
         }
 
         function createConfetti() {
